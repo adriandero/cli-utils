@@ -7,7 +7,7 @@
 # Configuration:
 #   WT_DEFAULT_TYPE   Default branch prefix.                  Default: feature
 #   WT_SUBDIR         Worktree location relative to repo.     Default: .claude/worktrees
-#   WT_SETUPS_DIR     Per-project setup scripts.              Default: <cli-utils>/wt-setups
+#   WT_SETUPS_DIR     Per-project setup scripts.              Default: ~/.config/wt/setups
 #   WT_OPEN_CMD       Editor command used by `wt-open`.       Default: webstorm
 #
 # Setup script lookup after `wt create` (first match wins):
@@ -15,11 +15,9 @@
 #   2. $WT_SETUPS_DIR/<main-repo-folder-name>.sh
 #   3. none — the worktree is created without setup
 
-typeset -g _WT_HOME="${${(%):-%x}:A:h:h}"
-
 : "${WT_DEFAULT_TYPE:=feature}"
 : "${WT_SUBDIR:=.claude/worktrees}"
-: "${WT_SETUPS_DIR:=$_WT_HOME/wt-setups}"
+: "${WT_SETUPS_DIR:=${XDG_CONFIG_HOME:-$HOME/.config}/wt/setups}"
 : "${WT_OPEN_CMD:=webstorm}"
 
 _wt_find_setup() {

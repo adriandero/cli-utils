@@ -110,25 +110,34 @@ The worktrees folder is added to `.git/info/exclude` so it never shows up in
 After creating a worktree, `wt` looks for a setup script (first match wins):
 
 1. `git config wt.setup <name|path>` in that repo — a bare name means
-   `wt-setups/<name>.sh`, anything with a `/` is a path (`~` allowed).
-2. `wt-setups/<main-repo-folder-name>.sh` — e.g. a repo cloned into `~/code/app`
-   uses `wt-setups/app.sh`.
+   `$WT_SETUPS_DIR/<name>.sh`, anything with a `/` is a path (`~` allowed).
+2. `$WT_SETUPS_DIR/<main-repo-folder-name>.sh` — e.g. a repo cloned into
+   `~/code/myproject` uses `~/.config/wt/setups/myproject.sh`.
 3. Nothing found → worktree is created without setup.
 
-The script runs with `bash`, from inside the new worktree, with the worktree
-path as `$1` and `WT_SUBDIR` in the environment. If it fails, `wt` says so;
-fix the cause and rerun the script by hand.
+Setup scripts are project-specific and live **outside** this repo
+(`~/.config/wt/setups/` by default), so nothing private gets pushed here.
 
-If a repo's folder name differs on another machine, point it at the script
+**Script contract:** runs with `bash`, from inside the new worktree, with the
+worktree path as `$1` and `WT_SUBDIR` in the environment. Non-zero exit makes
+`wt` report the failure; fix the cause and rerun the script by hand. Typical
+jobs: symlink `node_modules`, copy gitignored files (`.env`, certs) from the
+main checkout, assign per-worktree ports.
+
+```bash
+# ~/.config/wt/setups/myproject.sh
+set -euo pipefail
+main="$(cd "$(git rev-parse --path-format=absolute --git-common-dir)/.." && pwd)"
+ln -sfn "$main/node_modules" "$1/node_modules"
+cp "$main/.env" "$1/.env"
+```
+
+If a repo's folder name differs from the script name, point it at the script
 once:
 
 ```bash
-git config wt.setup app
+git config wt.setup myproject
 ```
-
-| Script              | Project                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------ |
-| `wt-setups/app.sh`  | Smart Wallet monorepo — symlinks `node_modules`, copies certs, assigns ports, Prisma client |
 
 ### Configuration
 
@@ -138,7 +147,7 @@ All optional; set as env vars before sourcing.
 | ----------------- | --------------------- | --------------------------------------------------- |
 | `WT_DEFAULT_TYPE` | `feature`             | Branch prefix used when `-t/--type` isn't given.    |
 | `WT_SUBDIR`       | `.claude/worktrees`   | Worktrees location, relative to the main repo root. |
-| `WT_SETUPS_DIR`   | `<cli-utils>/wt-setups` | Where per-project setup scripts live.             |
+| `WT_SETUPS_DIR`   | `~/.config/wt/setups` | Where per-project setup scripts live.               |
 | `WT_OPEN_CMD`     | `webstorm`            | Editor command used by `wt-open`.                   |
 
 ### Tip: simpler `git push`
