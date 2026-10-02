@@ -7,6 +7,19 @@ Small command-line utilities.
 - [`unwrap.py`](#unwrappy) — clean terminal-copied text for pasting
 - [`shell/wt.zsh`](#wt) — git worktree helper
 
+## Install (new machine)
+
+```bash
+git clone https://github.com/adriandero/cli-utils.git ~/Documents/cli-utils
+~/Documents/cli-utils/install.sh
+source ~/.zshrc
+```
+
+`install.sh` appends a `# --- cli-utils ---` block to `~/.zshrc` (sources
+`wt.zsh`, adds the `unwrap` alias). Rerunning it is a no-op.
+
+Requirements: zsh, git ≥ 2.31. Setup scripts may need more (see each script).
+
 ---
 
 ## `unwrap.py`
@@ -31,7 +44,7 @@ It also strips Claude Code's leading marker character (`▎`).
 Reads from stdin, writes to stdout:
 
 ```bash
-pbpaste | python3 unwrap.py | pbpaste
+pbpaste | python3 unwrap.py | pbcopy
 ```
 
 Or pipe from anywhere:
@@ -56,68 +69,77 @@ alias unwrap='pbpaste | python3 "$HOME/Documents/cli-utils/unwrap.py" | pbcopy'
 
 ## `wt`
 
-A git **worktree** helper for a ticket-based branching workflow. It creates
-one worktree per branch under a configurable subfolder, names branches with a
-type prefix (`feature/`, `bugfix/`, …), and `cd`s you straight into the new
-worktree.
+A git **worktree** helper for a ticket-based branching workflow. Works in any
+git repo: it creates one worktree per branch under a configurable subfolder,
+names branches with a type prefix (`feature/`, `bugfix/`, …), `cd`s you into
+the new worktree, and runs a **per-project** setup script if one exists.
 
 Because it changes your shell's current directory, `wt` is a **shell
-function**, not a standalone script — it must be *sourced*, not executed.
-
-### Install
-
-Source it from your `~/.zshrc`:
-
-```bash
-# --- cli-utils ---
-export WT_SETUP_SCRIPT="$HOME/Documents/app/.claude/setup-worktree.sh"
-# export WT_DEFAULT_TYPE="feature"
-# export WT_SUBDIR=".claude/worktrees"
-# export WT_OPEN_CMD="webstorm"
-source "$HOME/Documents/cli-utils/shell/wt.zsh"
-```
-
-Then reload:
-
-```bash
-source ~/.zshrc
-```
+function**, not a standalone script — it must be *sourced* (see Install).
 
 ### Usage
 
 ```text
-wt <ticket>                switch/create worktree (default type: feature)
-wt -t <type> <ticket>      use a custom branch prefix (bugfix, chore, ...)
-wt --list | -l             list worktrees
-wt --rm <ticket>           remove worktree + delete its branch
-wt --help | -h             show help
+wt create <ticket>             create or switch to a worktree
+wt create -t <type> <ticket>   use a custom branch prefix
+wt touch <ticket>              alias for `wt create`
+wt list                        list worktrees
+wt rm [-f] <ticket>            remove worktree and delete its branch
+wt help                        show help
+wt-open                        open the current worktree in $WT_OPEN_CMD
 ```
 
 ### Examples
 
 ```bash
-wt sw-3302                 # -> branch feature/SW-3302
-wt -t bugfix sw-3302       # -> branch bugfix/SW-3302
-wt -t chore sw-3302        # -> branch chore/SW-3302
-wt --list
-wt --rm sw-3302            # detects & deletes the branch that worktree used
+wt create sw-3302              # -> branch feature/sw-3302
+wt create -t bugfix sw-3302    # -> branch bugfix/sw-3302
+wt list
+wt rm sw-3302                  # detects & deletes the branch that worktree used
 ```
 
 Branch names get the `<type>/` prefix, but worktree **folders** stay flat
-(e.g. `SW-3302`), so directories never nest. Worktrees are always created
+(e.g. `sw-3302`), so directories never nest. Worktrees are always created
 relative to the *main* repo root (via `git --git-common-dir`), so running
 `wt` from inside one worktree won't create nested worktrees in another.
+The worktrees folder is added to `.git/info/exclude` so it never shows up in
+`git status`.
+
+### Per-project setup scripts
+
+After creating a worktree, `wt` looks for a setup script (first match wins):
+
+1. `git config wt.setup <name|path>` in that repo — a bare name means
+   `wt-setups/<name>.sh`, anything with a `/` is a path (`~` allowed).
+2. `wt-setups/<main-repo-folder-name>.sh` — e.g. a repo cloned into `~/code/app`
+   uses `wt-setups/app.sh`.
+3. Nothing found → worktree is created without setup.
+
+The script runs with `bash`, from inside the new worktree, with the worktree
+path as `$1` and `WT_SUBDIR` in the environment. If it fails, `wt` says so;
+fix the cause and rerun the script by hand.
+
+If a repo's folder name differs on another machine, point it at the script
+once:
+
+```bash
+git config wt.setup app
+```
+
+| Script              | Project                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `wt-setups/app.sh`  | Smart Wallet monorepo — symlinks `node_modules`, copies certs, assigns ports, Prisma client |
 
 ### Configuration
 
 All optional; set as env vars before sourcing.
 
-| Variable          | Default             | Description                                                        |
-| ----------------- | ------------------- | ------------------------------------------------------------------ |
-| `WT_DEFAULT_TYPE` | `feature`           | Branch prefix used when `-t/--type` isn't given.                   |
-| `WT_SUBDIR`       | `.claude/worktrees` | Worktrees location, relative to the main repo root.                |
-| `WT_SETUP_SCRIPT` | *(unset)*           | Script run after creating a worktree; receives the path as `$1`.   |
-| `WT_OPEN_CMD`     | `webstorm`          | Editor command used by the `wt-open` alias.                        |
+| Variable          | Default               | Description                                         |
+| ----------------- | --------------------- | --------------------------------------------------- |
+| `WT_DEFAULT_TYPE` | `feature`             | Branch prefix used when `-t/--type` isn't given.    |
+| `WT_SUBDIR`       | `.claude/worktrees`   | Worktrees location, relative to the main repo root. |
+| `WT_SETUPS_DIR`   | `<cli-utils>/wt-setups` | Where per-project setup scripts live.             |
+| `WT_OPEN_CMD`     | `webstorm`            | Editor command used by `wt-open`.                   |
 
 ### Tip: simpler `git push`
 
